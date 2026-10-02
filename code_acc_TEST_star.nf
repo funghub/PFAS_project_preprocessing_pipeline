@@ -7,6 +7,9 @@
 // nextflow run funghub/PFAS_project --input PRJNA604830 -profile spartan_hpc -latest -resume
 // nextflow run code.nf --input PRJNA604830 -profile spartan_hpc -resume // this is for code stored on HPC
 
+// Run this inside with_STAR folder
+// nextflow run funghub/PFAS_project --input /scratch/home/lfung/PFAS_TEST_pfas/SRR_Acc_List.txt -profile spartan_hpc -latest -resume
+
 // nextflow.enable.dsl=2
 
 process header {
@@ -34,21 +37,21 @@ process footer {
     """
 }
 
-process retrieve_accessions_numbers {
-    conda "bioconda::entrez-direct"
+// process retrieve_accessions_numbers {
+//     conda "bioconda::entrez-direct"
 
-    input: 
-    val SRA_accession_number
+//     input: 
+//     val SRA_accession_number
 
-    output:
-    path "SRR_Acc_List.txt", emit: accession_numbers_file
+//     output:
+//     path "SRR_Acc_List.txt", emit: accession_numbers_file
 
-    script:
-    """
-    esearch -db sra -query ${SRA_accession_number} | efetch -format runinfo | cut -d',' -f 1 | grep SRR > SRR_Acc_List.txt
-    """
-    // you can do grep -c to double check on the web if the number of items match
-}
+//     script:
+//     """
+//     esearch -db sra -query ${SRA_accession_number} | efetch -format runinfo | cut -d',' -f 1 | grep SRR > SRR_Acc_List.txt
+//     """
+//     // you can do grep -c to double check on the web if the number of items match
+// }
 
 process retrieve_sra {
     conda "bioconda::sra-tools=3.4.1 conda-forge::ossuuid"
@@ -395,19 +398,26 @@ workflow {
     exit 0
     }
 
-    def sra_accession_number = params.input
+    header()
 
-    // header()
+    // def sra_accession_number = params.input
 
-    retrieve_accessions_numbers(sra_accession_number)
+    // NEW:
+    def accession_numbers_file = file(params.input)
+    // instead of taking the output sra accession numbers file from function, input my own
+    accession_numbers_file
+    //
 
-    // split the txt file into one accession number per channel
-    // this replaces xargs in the bash script in retrieve_fastq which was inefficient
-    retrieve_accessions_numbers.out.accession_numbers_file
+    // retrieve_accessions_numbers(sra_accession_number)
+
+    // // split the txt file into one accession number per channel
+    // // this replaces xargs in the bash script in retrieve_fastq which was inefficient
+    // retrieve_accessions_numbers.out.accession_numbers_file
         .splitText()
         .map { it.trim() } // for each item in txt file, trim off white spaces char
         .filter {it} // get lines where it (each item) is true
         .set { accessions_ch } // set it as a new variable for channel
+
 
     retrieve_sra(accessions_ch)
     retrieve_fastq(retrieve_sra.out.sra_files)
@@ -483,9 +493,9 @@ workflow {
 
 output {
 
-    retrieve_accessions_numbers {
-        path "${params.output_dir}/pretrim/SRR_Acc_List.txt"
-    }
+    // retrieve_accessions_numbers {
+    //     path "${params.output_dir}/pretrim/SRR_Acc_List.txt"
+    // }
 
     sra_files {
         path "${params.output_dir}/pretrim/sra_files"
