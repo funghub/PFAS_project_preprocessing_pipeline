@@ -177,7 +177,18 @@ process MULTIQC {
     """
 }
 
+process RNABowtie_index {
+
+    script:
+    """
+    bowtie2-build probes.fasta probe_index
+    """
+}
+
 process RNABowtie {
+
+    conda "bioconda::multiqc"
+
     label "Bowtie_probe_Aligning"
     cpus 28
     clusterOptions "--nodes=1"
@@ -205,59 +216,59 @@ process RNABowtie {
 }
 
 
-process STAR_index {
-    conda "bioconda::star"
+// process STAR_index {
+//     conda "bioconda::star"
     
-    output:
-    path "STAR_hg38_index", emit: star_index
-    path "Genome_Annotation/hg38.ncbiRefSeq.gtf", emit: gtf_file
+//     output:
+//     path "STAR_hg38_index", emit: star_index
+//     path "Genome_Annotation/hg38.ncbiRefSeq.gtf", emit: gtf_file
 
-    script:
-    """
-    # get genome assembly and get only chr files
-    wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.chromFa.tar.gz
-    mkdir Genome_Assembly
-    tar -xvf hg38.chromFa.tar.gz -C Genome_Assembly
-    ls Genome_Assembly/chroms | grep -v -e "random" -e "alt" -e "chrUn" | xargs -I{} cat Genome_Assembly/chroms/{} > Genome_Assembly/chroms_all.fa
+//     script:
+//     """
+//     # get genome assembly and get only chr files
+//     wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.chromFa.tar.gz
+//     mkdir Genome_Assembly
+//     tar -xvf hg38.chromFa.tar.gz -C Genome_Assembly
+//     ls Genome_Assembly/chroms | grep -v -e "random" -e "alt" -e "chrUn" | xargs -I{} cat Genome_Assembly/chroms/{} > Genome_Assembly/chroms_all.fa
 
-    # get gene annotation gtf file
-    wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/genes/hg38.ncbiRefSeq.gtf.gz
-    mkdir Genome_Annotation
-    gunzip -c hg38.ncbiRefSeq.gtf.gz > Genome_Annotation/hg38.ncbiRefSeq.gtf
+//     # get gene annotation gtf file
+//     wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/genes/hg38.ncbiRefSeq.gtf.gz
+//     mkdir Genome_Annotation
+//     gunzip -c hg38.ncbiRefSeq.gtf.gz > Genome_Annotation/hg38.ncbiRefSeq.gtf
 
-    mkdir STAR_hg38_index
+//     mkdir STAR_hg38_index
     
-    # create index
-    STAR --runThreadN ${task.cpus} \
-        --runMode genomeGenerate \
-        --genomeDir STAR_hg38_index \
-        --genomeFastaFiles Genome_Assembly/chroms_all.fa \
-        --sjdbGTFfile Genome_Annotation/hg38.ncbiRefSeq.gtf \
-        --sjdbOverhang 99
-    """
-}
+//     # create index
+//     STAR --runThreadN ${task.cpus} \
+//         --runMode genomeGenerate \
+//         --genomeDir STAR_hg38_index \
+//         --genomeFastaFiles Genome_Assembly/chroms_all.fa \
+//         --sjdbGTFfile Genome_Annotation/hg38.ncbiRefSeq.gtf \
+//         --sjdbOverhang 99
+//     """
+// }
 
-process STAR_align {
-    conda "bioconda::star"
+// process STAR_align {
+//     conda "bioconda::star"
     
-    input:
-    path star_index
-    path trimmed_fastq
+//     input:
+//     path star_index
+//     path trimmed_fastq
 
-    output:
-    path "*.bam", emit: star_alignment
-    path "*.{out,tab}", emit: star_logs
+//     output:
+//     path "*.bam", emit: star_alignment
+//     path "*.{out,tab}", emit: star_logs
 
-    script:
-    """
-    # complete alignment
-    STAR --genomeDir ${star_index} \
-        --readFilesIn ${trimmed_fastq} \
-        --outFileNamePrefix ${trimmed_fastq.baseName}. \
-        --runThreadN ${task.cpus} \
-        --outSAMtype BAM SortedByCoordinate
-    """
-}
+//     script:
+//     """
+//     # complete alignment
+//     STAR --genomeDir ${star_index} \
+//         --readFilesIn ${trimmed_fastq} \
+//         --outFileNamePrefix ${trimmed_fastq.baseName}. \
+//         --runThreadN ${task.cpus} \
+//         --outSAMtype BAM SortedByCoordinate
+//     """
+// }
 
 process samtools_index { // for getting bai file from bam
     conda "bioconda::samtools"

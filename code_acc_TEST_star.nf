@@ -403,7 +403,7 @@ workflow {
     // def sra_accession_number = params.input
 
     // NEW:
-    def accession_numbers_file = file(params.input)
+    def accession_numbers_file = Channel.fromPath(params.input)
     // instead of taking the output sra accession numbers file from function, input my own
     accession_numbers_file
     //
