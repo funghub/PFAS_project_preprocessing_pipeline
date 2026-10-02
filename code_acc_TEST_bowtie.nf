@@ -12,6 +12,12 @@
 
 // nextflow.enable.dsl=2
 
+// From Aarohi setting the probes to that file in my copy of it
+// params.probes_dir = "/home/achopra/BPA_Alt_Human/BPA/probes/"
+params.probes_dir = "/scratch/home/lfung/PFAS_TEST_pfas/with_bowtie/probes.fasta"
+
+
+
 process header {
     script:
     """
@@ -170,6 +176,34 @@ process MULTIQC {
     multiqc ${reports}
     """
 }
+
+process RNABowtie {
+    label "Bowtie_probe_Aligning"
+    cpus 28
+    clusterOptions "--nodes=1"
+    publishDir "${params.probes_output}${sra_id}", mode:'copy'
+    conda "/home/achopra/miniconda3/envs/bowtie/bowtie.yaml"
+    memory '60 GB'
+
+    input:
+    tuple val(sra_id), path(trimmed_fastq), path(html_file), path(json_file)
+
+    output:
+    tuple val(sra_id), path("${sra_id}.sam"), path("${sra_id}_bowtie_Aligned.out.bam"), path("${sra_id}bowtie.log")
+
+    script:
+    """
+    mkdir -p ${params.probes_output}${sra_id}
+    bowtie2 --no-unal \
+            -x ${params.probes_dir}probe_index \
+            -U ${trimmed_fastq} \
+            -S ${sra_id}.sam \
+            -p ${task.cpus} > ${sra_id}bowtie.log 2>&1
+    samtools view -bS ${sra_id}.sam | samtools sort -o ${sra_id}_bowtie_Aligned.out.bam
+    # rm -f ${sra_id}.sam
+    """
+}
+
 
 process STAR_index {
     conda "bioconda::star"
@@ -452,7 +486,7 @@ workflow {
 
     publish:
 
-    // retrieve_accessions_numbers = retrieve_accessions_numbers.out.accession_numbers_file
+    retrieve_accessions_numbers = retrieve_accessions_numbers.out.accession_numbers_file
 
     sra_files = retrieve_sra.out.sra_files
     fastq_pretrim = retrieve_fastq.out.pretrim_fastq
