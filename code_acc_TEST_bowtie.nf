@@ -482,7 +482,7 @@ workflow {
 
     publish:
 
-    retrieve_accessions_numbers = retrieve_accessions_numbers.out.accession_numbers_file
+    // retrieve_accessions_numbers = retrieve_accessions_numbers.out.accession_numbers_file
 
     sra_files = retrieve_sra.out.sra_files
     fastq_pretrim = retrieve_fastq.out.pretrim_fastq
