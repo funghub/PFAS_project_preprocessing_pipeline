@@ -323,6 +323,23 @@ process MULTIQC_markdups_picard {
     """
 }
 
+process generate_SAF {
+    conda "bioconda::samtools"
+    
+    input:
+    path probes_fasta
+
+    output:
+    path "*.saf", emit: SAF_file
+
+    script:
+    // samtools faidx -> fai -> saf with awk command -> SAF --> pipe to featurecounts -F
+    """
+    samtools faidx ${probes_fasta}
+    awk 
+    """
+}
+
 process feature_counts_raw {
     conda "bioconda::subread"
     
