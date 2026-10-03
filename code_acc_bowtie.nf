@@ -14,8 +14,8 @@
 
 // From Aarohi setting the probes to that file in my copy of it
 // params.probes_dir = "/home/achopra/BPA_Alt_Human/BPA/probes/"
-params.probes_fa = "/scratch/home/lfung/PFAS_TEST_pfas/with_bowtie/probes.fasta"
-params.gtf_file = "/scratch/home/lfung/PFAS_TEST_pfas/with_bowtie/temposeq_annotations_with_transcripts.gtf"
+params.probes_fa = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/probes.fasta"
+params.gtf_file = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/temposeq_annotations_with_transcripts.gtf"
 
 
 process header {
