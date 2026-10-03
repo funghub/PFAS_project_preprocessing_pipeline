@@ -310,6 +310,21 @@ process MULTIQC_markdups_flagstat {
     """
 }
 
+process MULTIQC_raw_flagstat {
+    conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+
+    input:
+    path raw_flagstat_star_logs
+
+    output:
+    path "multiqc_raw_flagstat.html", emit: report_raw_flagstat
+
+    script:
+    """
+    multiqc ${raw_flagstat_star_logs} -n multiqc_raw_flagstat
+    """
+}
+
 process feature_counts_raw {
     conda "bioconda::subread"
     
@@ -437,9 +452,18 @@ workflow {
     picard_add_read_groups(STAR_align.out.star_alignment)
     picard_mark_duplicates(picard_add_read_groups.out.add_RG_bam)
 
+    // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
+    MULTIQC_raw_flagstat(
+        samtools_flagstat.out.flagstat.collect()
+            .mix(STAR_align.out.star_logs.collect())
+            .collect())
+
+    // markdups: Picard metrics only
     // add in picard metrics file and mix channel with the outputs for samtools flagstat metrics
-    MULTIQC_markdups_flagstat(picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
-    
+    MULTIQC_markdups_flagstat(
+        // picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
+        picard_mark_duplicates.out.marked_dups_metrics.collect())
+
     // feature counts for without marked duplications!!!
     feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
     // feature counts for with marked duplications!!!
@@ -481,6 +505,8 @@ workflow {
     marked_dups_metrics = picard_mark_duplicates.out.marked_dups_metrics
 
     multiqc_markdups_flagstat = MULTIQC_markdups_flagstat.out.report_markdups_flagstat
+
+    multiqc_raw_flagstat = MULTIQC_raw_flagstat.out.report_raw_flagstat
 
     // feature counts for without marked duplications!!!
     featurecounts_raw = feature_counts_raw.out.counts
@@ -583,6 +609,11 @@ output {
     multiqc_markdups_flagstat {
         path "${params.output_dir}/multi_qc_results"
         mode 'copy'
+    }
+
+    multiqc_raw_flagstat {
+    path "${params.output_dir}/multi_qc_results"
+    mode 'copy'
     }
 
     featurecounts_raw {

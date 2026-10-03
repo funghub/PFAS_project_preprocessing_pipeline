@@ -14,8 +14,7 @@
 
 // From Aarohi setting the probes to that file in my copy of it
 // params.probes_dir = "/home/achopra/BPA_Alt_Human/BPA/probes/"
-params.probes_dir = "/scratch/home/lfung/PFAS_TEST_pfas/with_bowtie/probes.fasta"
-
+params.probes_fa = "/scratch/home/lfung/PFAS_TEST_pfas/with_bowtie/probes.fasta"
 
 
 process header {
@@ -177,41 +176,46 @@ process MULTIQC {
     """
 }
 
+// NEW:
 process RNABowtie_index {
 
-    script:
-    """
-    bowtie2-build probes.fasta probe_index
-    """
-}
-
-process RNABowtie {
-
-    conda "bioconda::multiqc"
-
-    label "Bowtie_probe_Aligning"
-    cpus 28
-    clusterOptions "--nodes=1"
-    publishDir "${params.probes_output}${sra_id}", mode:'copy'
-    conda "/home/achopra/miniconda3/envs/bowtie/bowtie.yaml"
-    memory '60 GB'
+    conda "bioconda::bowtie2"
 
     input:
-    tuple val(sra_id), path(trimmed_fastq), path(html_file), path(json_file)
+    path probes_fa
 
     output:
-    tuple val(sra_id), path("${sra_id}.sam"), path("${sra_id}_bowtie_Aligned.out.bam"), path("${sra_id}bowtie.log")
+    path "probe_index*", emit: probe_index
 
     script:
     """
-    mkdir -p ${params.probes_output}${sra_id}
-    bowtie2 --no-unal \
-            -x ${params.probes_dir}probe_index \
+    bowtie2-build -f ${probes_fa} probe_index
+    """
+    // {the list of genes fasta} {output index file}
+}
+
+// NEW:
+process RNABowtie {
+
+    conda "bioconda::bowtie2 bioconda::samtools"
+
+    input:
+    path bowtie_index
+    path trimmed_fastq
+
+    output:
+    path "*.bam", emit: bowtie_alignment
+    path "*.log", emit: bowtie_logs
+
+    script:
+    def prefix = trimmed_fastq.name.replace("_trimmed.fastq","")
+    """
+    # --no-unal suppress suppress SAM records for unaligned reads
+    bowtie2 --no-unal \ 
+            -x probe_index \
             -U ${trimmed_fastq} \
-            -S ${sra_id}.sam \
-            -p ${task.cpus} > ${sra_id}bowtie.log 2>&1
-    samtools view -bS ${sra_id}.sam | samtools sort -o ${sra_id}_bowtie_Aligned.out.bam
-    # rm -f ${sra_id}.sam
+            -p ${task.cpus} 2> ${prefix}_bowtie.log \
+            | samtools sort -o ${prefix}_bowtie_Aligned.out.bam
     """
 }
 
@@ -296,8 +300,11 @@ process samtools_flagstat {
     path "*.txt", emit: flagstat
 
     script:
-    def prefix = star_alignment.name.replace("_trimmed.Aligned.sortedByCoord.out.bam","")
-
+    // def prefix = star_alignment.name.replace("_trimmed.Aligned.sortedByCoord.out.bam","")
+    
+    // NEW:
+    def prefix = star_alignment.name.replace("_bowtie_Aligned.out.bam","")
+    
     """
     samtools flagstat ${star_alignment} > ${prefix}_flagstat.txt
     """
@@ -314,7 +321,7 @@ process picard_add_read_groups {
     path "*.bam", emit: add_RG_bam
 
     script:
-    def prefix = star_alignment.name.replace("_trimmed.Aligned.sortedByCoord.out.bam","")
+    def prefix = star_alignment.name.replace("_bowtie_Aligned.out.bam","")
 
     """
     # make sure to add back the read groups to the header of the BAM file
@@ -340,18 +347,33 @@ process picard_mark_duplicates {
     """
 }
 
-process MULTIQC_markdups_flagstat {
+process MULTIQC_raw_flagstat {
+    conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+
+    input:
+    path raw_flagstat_bowtie_logs
+
+    output:
+    path "multiqc_raw_flagstat.html", emit: report_raw_flagstat
+
+    script:
+    """
+    multiqc ${raw_flagstat_bowtie_logs} -n multiqc_raw_flagstat
+    """
+}
+
+process MULTIQC_markdups_picard {
     conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
     
     input:
     path marked_dups_flagstat_metrics
 
     output:
-    path "multiqc_markdups_flagstat.html", emit: report_markdups_flagstat
+    path "multiqc_markdups_picard-only.html", emit: report_markdups_flagstat
 
     script:
     """
-    multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_flagstat
+    multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_picard-only
     """
 }
 
@@ -448,7 +470,7 @@ workflow {
     // def sra_accession_number = params.input
 
     // NEW:
-    def accession_numbers_file = file(params.input)
+    def accession_numbers_file = Channel.fromPath(params.input)
     // instead of taking the output sra accession numbers file from function, input my own
     accession_numbers_file
     //
@@ -473,18 +495,39 @@ workflow {
     FASTP(retrieve_fastq.out.pretrim_fastq)
     FASTQC(FASTP.out.trimmed) // .trimmed specifically refers to the emit name given
     MULTIQC(FASTQC.out.qc_files.collect()) // must use .colect() with () to work
-    STAR_index()
-    STAR_align(STAR_index.out.star_index, FASTP.out.trimmed)
+    // STAR_index()
+    // STAR_align(STAR_index.out.star_index, FASTP.out.trimmed)
 
-    samtools_index(STAR_align.out.star_alignment)
-    samtools_flagstat(STAR_align.out.star_alignment)
+    // NEW:
+    RNABowtie_index(file(params.probes_fa))
+    RNABowtie(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
 
-    picard_add_read_groups(STAR_align.out.star_alignment)
+    // samtools_index(STAR_align.out.star_alignment)
+    // samtools_flagstat(STAR_align.out.star_alignment)
+
+    // picard_add_read_groups(STAR_align.out.star_alignment)
+
+    // NEW:
+    samtools_index(RNABowtie.out.bowtie_alignment)
+    samtools_flagstat(RNABowtie.out.bowtie_alignment)
+
+
+    picard_add_read_groups(RNABowtie.out.bowtie_alignment)
     picard_mark_duplicates(picard_add_read_groups.out.add_RG_bam)
 
+     // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
+    MULTIQC_raw_flagstat(
+        samtools_flagstat.out.flagstat.collect()
+            .mix(RNABowtie.out.bowtie_logs.collect())
+            .collect())
+
+    // markdups: Picard metrics only
     // add in picard metrics file and mix channel with the outputs for samtools flagstat metrics
-    MULTIQC_markdups_flagstat(picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
-    
+    MULTIQC_markdups_picard(
+        // picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
+        picard_mark_duplicates.out.marked_dups_metrics.collect())
+
+
     // feature counts for without marked duplications!!!
     feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
     // feature counts for with marked duplications!!!
@@ -512,9 +555,13 @@ workflow {
     
     multiqc_results = MULTIQC.out.report
 
-    star_index = STAR_index.out.star_index
-    star_alignment = STAR_align.out.star_alignment
-    star_logs = STAR_align.out.star_logs
+    // star_index = STAR_index.out.star_index
+    // star_alignment = STAR_align.out.star_alignment
+    // star_logs = STAR_align.out.star_logs
+
+    // NEW:
+    bowtie_alignment = RNABowtie.out.bowtie_alignment
+    bowtie_logs = RNABowtie.out.bowtie_logs
 
     bai_files = samtools_index.out.bai_files
 
@@ -525,7 +572,8 @@ workflow {
     marked_dups_bam = picard_mark_duplicates.out.marked_dups_bam
     marked_dups_metrics = picard_mark_duplicates.out.marked_dups_metrics
 
-    multiqc_markdups_flagstat = MULTIQC_markdups_flagstat.out.report_markdups_flagstat
+    multiqc_raw_flagstat = MULTIQC_raw_flagstat.out.report_raw_flagstat
+    multiqc_markdups_picard = MULTIQC_markdups_picard.out.report_markdups_flagstat
 
     // feature counts for without marked duplications!!!
     featurecounts_raw = feature_counts_raw.out.counts
@@ -625,7 +673,12 @@ output {
         mode 'copy'
     }
 
-    multiqc_markdups_flagstat {
+    multiqc_raw_flagstat {
+    path "${params.output_dir}/multi_qc_results"
+    mode 'copy'
+    }
+
+    multiqc_markdups_picard {
         path "${params.output_dir}/multi_qc_results"
         mode 'copy'
     }
@@ -649,5 +702,10 @@ output {
         path "${params.output_dir}/featurecounts"
         mode 'copy'
     }
+
+
+    // NEW:
+    bowtie_alignment { path "${params.output_dir}/bowtie_alignment"; mode 'copy' }
+    bowtie_logs      { path "${params.output_dir}/bowtie_logs" }
 
 }
