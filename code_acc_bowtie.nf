@@ -472,18 +472,6 @@ workflow {
     picard_add_read_groups(RNABowtie.out.bowtie_alignment)
     picard_mark_duplicates(picard_add_read_groups.out.add_RG_bam)
 
-     // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
-    MULTIQC_raw_flagstat(
-        samtools_flagstat.out.flagstat.collect()
-            .mix(RNABowtie.out.bowtie_logs.collect())
-            .collect())
-
-    // markdups: Picard metrics only
-    // add in picard metrics file and mix channel with the outputs for samtools flagstat metrics
-    MULTIQC_markdups_picard(
-        // picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
-        picard_mark_duplicates.out.marked_dups_metrics.collect())
-
     // generate_SAF(params.probes_fa)
 
     // feature counts for without marked duplications!!!
@@ -493,7 +481,21 @@ workflow {
     // feature counts for with marked duplications!!!
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
     feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), file(params.gtf_file), "markdups")
-    
+
+     // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
+    MULTIQC_raw_flagstat(
+        samtools_flagstat.out.flagstat.collect()
+            .mix(RNABowtie.out.bowtie_logs.collect())
+            .mix(feature_counts_raw.out.summary.collect())
+            .collect())
+
+    // markdups: Picard metrics only
+    // add in picard metrics file and mix channel with the outputs for samtools flagstat metrics
+    MULTIQC_markdups_picard(
+        // picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
+        picard_mark_duplicates.out.marked_dups_metrics.collect()
+        .mix(feature_counts_markdups.out.summary.collect())
+        .collect())
 
 
     // footer()
