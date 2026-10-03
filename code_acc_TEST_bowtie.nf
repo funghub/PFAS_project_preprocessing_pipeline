@@ -323,22 +323,23 @@ process MULTIQC_markdups_picard {
     """
 }
 
-process generate_SAF {
-    conda "bioconda::samtools"
+// process generate_SAF {
+//     conda "bioconda::samtools"
     
-    input:
-    path probes_fasta
+//     input:
+//     path probes_fasta
 
-    output:
-    path "*.saf", emit: SAF_file
+//     output:
+//     path "*.fai", emit: FAI_file
+//     path "*.saf", emit: SAF_file
 
-    script:
-    // samtools faidx -> fai -> saf with awk command -> SAF --> pipe to featurecounts -F
-    """
-    samtools faidx ${probes_fasta}
-    awk 
-    """
-}
+//     script:
+//     // samtools faidx -> fai -> saf with awk command -> SAF --> pipe to featurecounts -F
+//     """
+//     samtools faidx ${probes_fasta}
+//     awk 'BEGIN{OFS="\\t"; print "GeneID","Chr","Start","End","Strand"} {print \$1, \$1, 1, \$2, "+"}' ${probes_fasta}.fai > probes.saf
+//     """
+// }
 
 process feature_counts_raw {
     conda "bioconda::subread"
@@ -356,7 +357,7 @@ process feature_counts_raw {
     script:
     """
     echo hello # remove
-    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files}
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files} 
     """
 }
 
@@ -376,7 +377,7 @@ process feature_counts_markdups {
     script:
     """
     echo hello # remove
-    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files}
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id --ignoreDup -o ${prefix}_counts.txt ${bam_files}
     """
 }
 
@@ -483,14 +484,15 @@ workflow {
         // picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
         picard_mark_duplicates.out.marked_dups_metrics.collect())
 
+    // generate_SAF(params.probes_fa)
 
     // feature counts for without marked duplications!!!
     // feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
-    // feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), params.gtf_file, "raw")
+    feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), file(params.gtf_file), "raw")
 
     // feature counts for with marked duplications!!!
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
-    // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), params.gtf_file, "markdups")
+    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), file(params.gtf_file), "markdups")
     
 
 
@@ -535,12 +537,15 @@ workflow {
     multiqc_raw_flagstat = MULTIQC_raw_flagstat.out.report_raw_flagstat
     multiqc_markdups_picard = MULTIQC_markdups_picard.out.report_markdups_flagstat
 
-    // feature counts for without marked duplications!!!
-    // featurecounts_raw = feature_counts_raw.out.counts
-    // featurecounts_summary_raw = feature_counts_raw.out.summary
+    // generate_SAF_FAI_file =  generate_SAF.out.FAI_file
+    // generate_SAF_file =  generate_SAF.out.SAF_file
 
-    // featurecounts_markdups = feature_counts_markdups.out.counts
-    // featurecounts_summary_markdups = feature_counts_markdups.out.summary
+    // feature counts for without marked duplications!!!
+    featurecounts_raw = feature_counts_raw.out.counts
+    featurecounts_summary_raw = feature_counts_raw.out.summary
+
+    featurecounts_markdups = feature_counts_markdups.out.counts
+    featurecounts_summary_markdups = feature_counts_markdups.out.summary
 
 }
 
@@ -628,25 +633,25 @@ output {
         mode 'copy'
     }
 
-    // featurecounts_raw {
-    //     path "${params.output_dir}/featurecounts"
-    //     mode 'copy'
-    // }
+    featurecounts_raw {
+        path "${params.output_dir}/featurecounts"
+        mode 'copy'
+    }
 
-    // featurecounts_summary_raw {
-    //     path "${params.output_dir}/featurecounts"
-    //     mode 'copy'
-    // }
+    featurecounts_summary_raw {
+        path "${params.output_dir}/featurecounts"
+        mode 'copy'
+    }
 
-    // featurecounts_markdups {
-    //     path "${params.output_dir}/featurecounts"
-    //     mode 'copy'
-    // }
+    featurecounts_markdups {
+        path "${params.output_dir}/featurecounts"
+        mode 'copy'
+    }
 
-    // featurecounts_summary_markdups {
-    //     path "${params.output_dir}/featurecounts"
-    //     mode 'copy'
-    // }
+    featurecounts_summary_markdups {
+        path "${params.output_dir}/featurecounts"
+        mode 'copy'
+    }
 
 
     // NEW:
@@ -661,5 +666,13 @@ output {
     bowtie_logs { 
         path "${params.output_dir}/bowtie_logs" 
         }
+    // generate_SAF_FAI_file { 
+    //     path "${params.output_dir}/generate_SAF"
+    //     mode 'copy' 
+    //     }
+    // generate_SAF_file { 
+    //     path "${params.output_dir}/generate_SAF"
+    //     mode 'copy' 
+    //     }
 
 }
