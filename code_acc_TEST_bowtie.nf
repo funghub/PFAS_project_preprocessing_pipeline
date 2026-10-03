@@ -220,61 +220,6 @@ process RNABowtie {
     """
 }
 
-
-// process STAR_index {
-//     conda "bioconda::star"
-    
-//     output:
-//     path "STAR_hg38_index", emit: star_index
-//     path "Genome_Annotation/hg38.ncbiRefSeq.gtf", emit: gtf_file
-
-//     script:
-//     """
-//     # get genome assembly and get only chr files
-//     wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.chromFa.tar.gz
-//     mkdir Genome_Assembly
-//     tar -xvf hg38.chromFa.tar.gz -C Genome_Assembly
-//     ls Genome_Assembly/chroms | grep -v -e "random" -e "alt" -e "chrUn" | xargs -I{} cat Genome_Assembly/chroms/{} > Genome_Assembly/chroms_all.fa
-
-//     # get gene annotation gtf file
-//     wget https://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/genes/hg38.ncbiRefSeq.gtf.gz
-//     mkdir Genome_Annotation
-//     gunzip -c hg38.ncbiRefSeq.gtf.gz > Genome_Annotation/hg38.ncbiRefSeq.gtf
-
-//     mkdir STAR_hg38_index
-    
-//     # create index
-//     STAR --runThreadN ${task.cpus} \
-//         --runMode genomeGenerate \
-//         --genomeDir STAR_hg38_index \
-//         --genomeFastaFiles Genome_Assembly/chroms_all.fa \
-//         --sjdbGTFfile Genome_Annotation/hg38.ncbiRefSeq.gtf \
-//         --sjdbOverhang 99
-//     """
-// }
-
-// process STAR_align {
-//     conda "bioconda::star"
-    
-//     input:
-//     path star_index
-//     path trimmed_fastq
-
-//     output:
-//     path "*.bam", emit: star_alignment
-//     path "*.{out,tab}", emit: star_logs
-
-//     script:
-//     """
-//     # complete alignment
-//     STAR --genomeDir ${star_index} \
-//         --readFilesIn ${trimmed_fastq} \
-//         --outFileNamePrefix ${trimmed_fastq.baseName}. \
-//         --runThreadN ${task.cpus} \
-//         --outSAMtype BAM SortedByCoordinate
-//     """
-// }
-
 process samtools_index { // for getting bai file from bam
     conda "bioconda::samtools"
     
@@ -496,17 +441,10 @@ workflow {
     FASTP(retrieve_fastq.out.pretrim_fastq)
     FASTQC(FASTP.out.trimmed) // .trimmed specifically refers to the emit name given
     MULTIQC(FASTQC.out.qc_files.collect()) // must use .colect() with () to work
-    // STAR_index()
-    // STAR_align(STAR_index.out.star_index, FASTP.out.trimmed)
 
     // NEW:
     RNABowtie_index(file(params.probes_fa))
     RNABowtie(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
-
-    // samtools_index(STAR_align.out.star_alignment)
-    // samtools_flagstat(STAR_align.out.star_alignment)
-
-    // picard_add_read_groups(STAR_align.out.star_alignment)
 
     // NEW:
     samtools_index(RNABowtie.out.bowtie_alignment)
@@ -531,7 +469,7 @@ workflow {
 
     // feature counts for without marked duplications!!!
     // feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
-    feature_counts_raw(STAR_align.out.star_alignment.collect(), params.gtf_file, "raw")
+    feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), params.gtf_file, "raw")
 
     // feature counts for with marked duplications!!!
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
@@ -564,6 +502,7 @@ workflow {
     // star_logs = STAR_align.out.star_logs
 
     // NEW:
+    bowtie_index = RNABowtie.out.probe_index
     bowtie_alignment = RNABowtie.out.bowtie_alignment
     bowtie_logs = RNABowtie.out.bowtie_logs
 
@@ -579,15 +518,12 @@ workflow {
     multiqc_raw_flagstat = MULTIQC_raw_flagstat.out.report_raw_flagstat
     multiqc_markdups_picard = MULTIQC_markdups_picard.out.report_markdups_flagstat
 
-
-
     // feature counts for without marked duplications!!!
+    featurecounts_raw = feature_counts_raw.out.counts
+    featurecounts_summary_raw = feature_counts_raw.out.summary
 
-    // featurecounts_raw = feature_counts_raw.out.counts
-    // featurecounts_summary_raw = feature_counts_raw.out.summary
-
-    // featurecounts_markdups = feature_counts_markdups.out.counts
-    // featurecounts_summary_markdups = feature_counts_markdups.out.summary
+    featurecounts_markdups = feature_counts_markdups.out.counts
+    featurecounts_summary_markdups = feature_counts_markdups.out.summary
 
 }
 
@@ -637,21 +573,6 @@ output {
     multiqc_results {
         path "${params.output_dir}/multi_qc_results"
         mode 'copy'
-    }
-
-    star_index {
-        path "${params.output_dir}/STAR_hg38_index"
-        // mode 'copy'
-    }
-
-    star_alignment {
-        path "${params.output_dir}/STAR_alignment"
-        mode 'copy'
-    }
-
-    star_logs {
-        path "${params.output_dir}/STAR_logs"
-        // mode 'copy'
     }
 
     // all the BAI files per BAM file
@@ -712,6 +633,7 @@ output {
 
 
     // NEW:
+    bowtie_index { path "${params.output_dir}/bowtie_index"; mode 'copy' }
     bowtie_alignment { path "${params.output_dir}/bowtie_alignment"; mode 'copy' }
     bowtie_logs      { path "${params.output_dir}/bowtie_logs" }
 
