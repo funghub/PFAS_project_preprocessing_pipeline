@@ -579,12 +579,15 @@ workflow {
     multiqc_raw_flagstat = MULTIQC_raw_flagstat.out.report_raw_flagstat
     multiqc_markdups_picard = MULTIQC_markdups_picard.out.report_markdups_flagstat
 
-    // feature counts for without marked duplications!!!
-    featurecounts_raw = feature_counts_raw.out.counts
-    featurecounts_summary_raw = feature_counts_raw.out.summary
 
-    featurecounts_markdups = feature_counts_markdups.out.counts
-    featurecounts_summary_markdups = feature_counts_markdups.out.summary
+
+    // feature counts for without marked duplications!!!
+
+    // featurecounts_raw = feature_counts_raw.out.counts
+    // featurecounts_summary_raw = feature_counts_raw.out.summary
+
+    // featurecounts_markdups = feature_counts_markdups.out.counts
+    // featurecounts_summary_markdups = feature_counts_markdups.out.summary
 
 }
 
