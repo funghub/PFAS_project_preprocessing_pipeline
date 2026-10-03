@@ -212,7 +212,7 @@ process RNABowtie {
     def prefix = trimmed_fastq.name.replace("_trimmed.fastq","")
     """
     # --no-unal suppress suppress SAM records for unaligned reads
-    bowtie2 --no-unal \ 
+    bowtie2 --no-unal \
             -x probe_index \
             -U ${trimmed_fastq} \
             -p ${task.cpus} 2> ${prefix}_bowtie.log \
@@ -469,11 +469,11 @@ workflow {
 
     // feature counts for without marked duplications!!!
     // feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
-    feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), params.gtf_file, "raw")
+    // feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), params.gtf_file, "raw")
 
     // feature counts for with marked duplications!!!
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
-    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), params.gtf_file, "markdups")
+    // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), params.gtf_file, "markdups")
     
 
 
@@ -502,7 +502,7 @@ workflow {
     // star_logs = STAR_align.out.star_logs
 
     // NEW:
-    bowtie_index = RNABowtie.out.probe_index
+    bowtie_index = RNABowtie_index.out.probe_index
     bowtie_alignment = RNABowtie.out.bowtie_alignment
     bowtie_logs = RNABowtie.out.bowtie_logs
 
@@ -519,11 +519,11 @@ workflow {
     multiqc_markdups_picard = MULTIQC_markdups_picard.out.report_markdups_flagstat
 
     // feature counts for without marked duplications!!!
-    featurecounts_raw = feature_counts_raw.out.counts
-    featurecounts_summary_raw = feature_counts_raw.out.summary
+    // featurecounts_raw = feature_counts_raw.out.counts
+    // featurecounts_summary_raw = feature_counts_raw.out.summary
 
-    featurecounts_markdups = feature_counts_markdups.out.counts
-    featurecounts_summary_markdups = feature_counts_markdups.out.summary
+    // featurecounts_markdups = feature_counts_markdups.out.counts
+    // featurecounts_summary_markdups = feature_counts_markdups.out.summary
 
 }
 
@@ -611,30 +611,38 @@ output {
         mode 'copy'
     }
 
-    featurecounts_raw {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
+    // featurecounts_raw {
+    //     path "${params.output_dir}/featurecounts"
+    //     mode 'copy'
+    // }
 
-    featurecounts_summary_raw {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
+    // featurecounts_summary_raw {
+    //     path "${params.output_dir}/featurecounts"
+    //     mode 'copy'
+    // }
 
-    featurecounts_markdups {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
+    // featurecounts_markdups {
+    //     path "${params.output_dir}/featurecounts"
+    //     mode 'copy'
+    // }
 
-    featurecounts_summary_markdups {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
+    // featurecounts_summary_markdups {
+    //     path "${params.output_dir}/featurecounts"
+    //     mode 'copy'
+    // }
 
 
     // NEW:
-    bowtie_index { path "${params.output_dir}/bowtie_index"; mode 'copy' }
-    bowtie_alignment { path "${params.output_dir}/bowtie_alignment"; mode 'copy' }
-    bowtie_logs      { path "${params.output_dir}/bowtie_logs" }
+    bowtie_index { 
+        path "${params.output_dir}/bowtie_index"
+        mode 'copy' 
+        }
+    bowtie_alignment { 
+        path "${params.output_dir}/bowtie_alignment"
+        mode 'copy' 
+        }
+    bowtie_logs { 
+        path "${params.output_dir}/bowtie_logs" 
+        }
 
 }
