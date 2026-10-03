@@ -15,6 +15,7 @@
 // From Aarohi setting the probes to that file in my copy of it
 // params.probes_dir = "/home/achopra/BPA_Alt_Human/BPA/probes/"
 params.probes_fa = "/scratch/home/lfung/PFAS_TEST_pfas/with_bowtie/probes.fasta"
+params.gtf_file = "/scratch/home/lfung/PFAS_TEST_pfas/with_bowtie/temposeq_annotations_with_transcripts.gtf"
 
 
 process header {
@@ -529,9 +530,12 @@ workflow {
 
 
     // feature counts for without marked duplications!!!
-    feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
+    // feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
+    feature_counts_raw(STAR_align.out.star_alignment.collect(), params.gtf_file, "raw")
+
     // feature counts for with marked duplications!!!
-    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
+    // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
+    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), params.gtf_file, "markdups")
     
 
 
