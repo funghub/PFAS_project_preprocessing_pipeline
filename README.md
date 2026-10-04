@@ -1,7 +1,8 @@
 ## To start on the HPC, run:
 `nextflow run funghub/PFAS_project --input PRJNA604830 -profile spartan_hpc -latest -resume`
 - -profile spartan_hpc sets the profile to run on specific nodes on the HPC
-- **code_acc.nf** (a pipeline) runs through Nextflow by pulling from GitHub that had **nextflow.config** configured already.
+- **code_acc_bowtie.nf** (a pipeline) runs through Nextflow by pulling from GitHub that had **nextflow.config** configured already.
+**NOTE: please download the TempO-Seq Manifest (Human S1500+ Surrogate v2.0 or another version) into a folder "manifest" in the directory you are running nextflow.**
 
 ## About command to start
 ### Usage to run command:

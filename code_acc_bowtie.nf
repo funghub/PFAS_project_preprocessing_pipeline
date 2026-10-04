@@ -14,9 +14,10 @@
 
 // From Aarohi setting the probes to that file in my copy of it
 // params.probes_dir = "/home/achopra/BPA_Alt_Human/BPA/probes/"
-params.probes_fa = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/probes.fasta"
-params.gtf_file = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/temposeq_annotations_with_transcripts.gtf"
+// params.probes_fa = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/probes.fasta"
+// params.gtf_file = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/temposeq_annotations_with_transcripts.gtf"
 
+params.manifest = "${projectDir}/manifest/*.csv" // get manifest from folder containing the main script (the cached clone of github)
 
 process header {
     script:
@@ -42,6 +43,35 @@ process footer {
     echo "run time: \$runtime" # print the run time
     """
 }
+
+process convert_manifest_fasta_GTF {
+    input:
+    path manifest_file
+
+    output:
+    path "*.gtf", emit: gtf_file
+    path "*.{fasta,fa}", emit: fasta_file
+
+    script:
+    """
+    # create fasta
+    while IFS="," read -r row_num probe_id gene_symbol probe_name probe_sequence PROBE_COORDINATE ENSEMBL_GENE_ID ALIGNED_ENSEMBL_TRANSCRIPTS ENTREZ_ID ALIGNED_REFSEQ_TRANSCRIPTS ATTENUATION_FACTOR
+    do
+        echo ">\$probe_name"
+        echo "\$probe_sequence"
+    done < <(tail -n +2 ${manifest_file}) > probes.fasta
+
+    # create gtf
+    while IFS="," read -r row_num probe_id gene_symbol probe_name probe_sequence PROBE_COORDINATE ENSEMBL_GENE_ID ALIGNED_ENSEMBL_TRANSCRIPTS ENTREZ_ID ALIGNED_REFSEQ_TRANSCRIPTS ATTENUATION_FACTOR
+    do
+        printf '%s\\tTempoSeq\\texon\\t1\\t%d\\t.\\t%s\\t.\\tgene_id "%s"; gene_name "%s"; probe_name "%s"; transcript_id "%s"; attenuation_factor "%s";\\n' \\
+            "\$probe_name" "\${#probe_sequence}" "\${PROBE_COORDINATE##*:}" \\
+            "\$ENSEMBL_GENE_ID" "\$gene_symbol" "\$probe_name" \\
+            "\${ALIGNED_REFSEQ_TRANSCRIPTS//+/|}" "\${ATTENUATION_FACTOR%\$'\\r'}"
+    done < <(tail -n +2 ${manifest_file}) > probes.gtf
+    """
+}
+
 
 process retrieve_accessions_numbers {
     conda "bioconda::entrez-direct"
@@ -315,11 +345,11 @@ process MULTIQC_markdups_picard {
     path marked_dups_flagstat_metrics
 
     output:
-    path "multiqc_markdups_picard-only.html", emit: report_markdups_flagstat
+    path "multiqc_markdups_picard.html", emit: report_markdups_flagstat
 
     script:
     """
-    multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_picard-only
+    multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_picard
     """
 }
 
@@ -356,7 +386,6 @@ process feature_counts_raw {
 
     script:
     """
-    echo hello # remove
     featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files} 
     """
 }
@@ -433,11 +462,16 @@ workflow {
 
     def sra_accession_number = params.input
 
+    def manifest_file = file(params.manifest, checkIfExists: true)   // list of 1 Path
+
+
     // // NEW:
     // def accession_numbers_file = Channel.fromPath(params.input)
     // // instead of taking the output sra accession numbers file from function, input my own
     // accession_numbers_file
     // //
+
+    convert_manifest_fasta_GTF(manifest_file)
 
     retrieve_accessions_numbers(sra_accession_number)
 
@@ -461,7 +495,7 @@ workflow {
     MULTIQC(FASTQC.out.qc_files.collect()) // must use .colect() with () to work
 
     // NEW:
-    RNABowtie_index(file(params.probes_fa))
+    RNABowtie_index(convert_manifest_fasta_GTF.out.fasta_file)
     RNABowtie(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
 
     // NEW:
@@ -472,15 +506,15 @@ workflow {
     picard_add_read_groups(RNABowtie.out.bowtie_alignment)
     picard_mark_duplicates(picard_add_read_groups.out.add_RG_bam)
 
-    // generate_SAF(params.probes_fa)
+    // generate_SAF(convert_manifest_fasta_GTF.out.)
 
     // feature counts for without marked duplications!!!
     // feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
-    feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), file(params.gtf_file), "raw")
+    feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), convert_manifest_fasta_GTF.out.gtf_file, "raw")
 
     // feature counts for with marked duplications!!!
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
-    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), file(params.gtf_file), "markdups")
+    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), convert_manifest_fasta_GTF.out.gtf_file, "markdups")
 
      // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
     MULTIQC_raw_flagstat(
@@ -502,6 +536,9 @@ workflow {
 
 
     publish:
+
+    GTF_file = convert_manifest_fasta_GTF.out.gtf_file
+    FA_file = convert_manifest_fasta_GTF.out.fasta_file
 
     retrieve_accessions_numbers = retrieve_accessions_numbers.out.accession_numbers_file
 
@@ -553,8 +590,18 @@ workflow {
 
 output {
 
+    GTF_file {
+        path "${params.output_dir}/GTF_fasta"
+        mode 'copy'
+    }
+
+    FA_file {
+        path "${params.output_dir}/GTF_fasta"
+        mode 'copy'
+    }
+
     retrieve_accessions_numbers {
-        path "${params.output_dir}/pretrim/SRR_Acc_List.txt"
+        path "${params.output_dir}/pretrim"
     }
 
     sra_files {
