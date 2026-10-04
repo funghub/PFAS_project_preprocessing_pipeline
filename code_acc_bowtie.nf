@@ -18,6 +18,7 @@
 // params.gtf_file = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/temposeq_annotations_with_transcripts.gtf"
 
 params.manifest = "${projectDir}/manifest/*.csv" // get manifest from folder containing the main script (the cached clone of github)
+// replaced ${launchDir}
 
 process header {
     script:
