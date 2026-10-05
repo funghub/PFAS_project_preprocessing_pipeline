@@ -412,17 +412,6 @@ process feature_counts_markdups {
 }
 
 
-/*
- * Pipeline parameters
- */
-params {
-    // input: Path = '/scratch/home/lfung/PFAS_Data_NF/test_multiqc/*.fastq'
-
-    // input: Path = 'test_multiqc/*.fastq' // assuming cd into test_runs
-    input = 'test_multiqc/*.fastq' // assuming cd into test_runs (don't need path b/c already channel.fromPath)
-
-}
-
 params.output_dir = 'results'     // Default output directory
 // params.input = "${params.input_dir}/*.fastq"
 
