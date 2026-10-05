@@ -29,7 +29,7 @@ conda activate nf_code
 cd '/scratch/home/lfung/PFAS_Data_NF_ref_bowtie'
 
 # srun hostname # print the name of the node
-nextflow run funghub/PFAS_project --input PRJNA1137368 -profile spartan_hpc -latest
+nextflow run funghub/PFAS_project --input PRJNA1137368 -profile spartan_hpc -latest -resume
 
 ###########################
 ###########################
