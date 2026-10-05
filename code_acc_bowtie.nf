@@ -654,12 +654,12 @@ output {
 
     // all the BAI files per BAM file
     bai_files {
-        path "${params.output_dir}/STAR_alignment"
+        path "${params.output_dir}/BOWTIE_alignment"
         mode 'copy'
     }
 
     flagstat {
-        path "${params.output_dir}/STAR_flagstat"
+        path "${params.output_dir}/BOWTIE_flagstat"
         // mode 'copy'
     }
 
