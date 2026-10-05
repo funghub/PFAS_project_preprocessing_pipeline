@@ -65,10 +65,16 @@ process convert_manifest_fasta_GTF {
     # create gtf
     while IFS="," read -r row_num probe_id gene_symbol probe_name probe_sequence PROBE_COORDINATE ENSEMBL_GENE_ID ALIGNED_ENSEMBL_TRANSCRIPTS ENTREZ_ID ALIGNED_REFSEQ_TRANSCRIPTS ATTENUATION_FACTOR
     do
+        strand="\${PROBE_COORDINATE##*:}"
+        [[ "\$strand" == [+-] ]] || strand="."  # if [[ "\$strand" != [+-] ]]; then strand="."; fi
+        tid="\${ALIGNED_REFSEQ_TRANSCRIPTS//+/|}"
+
+        # use tid if it is set and non-empty, otherwise use probe_name
+        # use ENSEMBL_GENE_ID if it is set and non-empty, otherwise use gene_symbol
         printf '%s\\tTempoSeq\\texon\\t1\\t%d\\t.\\t%s\\t.\\tgene_id "%s"; gene_name "%s"; probe_name "%s"; transcript_id "%s"; attenuation_factor "%s";\\n' \\
-            "\$probe_name" "\${#probe_sequence}" "\${PROBE_COORDINATE##*:}" \\
-            "\$ENSEMBL_GENE_ID" "\$gene_symbol" "\$probe_name" \\
-            "\${ALIGNED_REFSEQ_TRANSCRIPTS//+/|}" "\${ATTENUATION_FACTOR%\$'\\r'}"
+            "\$probe_name" "\${#probe_sequence}" "\$strand" \\
+            "\${ENSEMBL_GENE_ID:-\$gene_symbol}" "\$gene_symbol" "\$probe_name" \\
+            "\${tid:-\$probe_name}" "\${ATTENUATION_FACTOR%\$'\\r'}"
     done < <(tail -n +2 ${manifest_file}) > probes.gtf
     """
 }
@@ -406,7 +412,6 @@ process feature_counts_markdups {
 
     script:
     """
-    echo hello # remove
     featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id --ignoreDup -o ${prefix}_counts.txt ${bam_files}
     """
 }

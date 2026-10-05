@@ -322,7 +322,6 @@ process feature_counts_raw {
 
     script:
     """
-    echo hello # remove
     featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files}
     """
 }
@@ -342,7 +341,6 @@ process feature_counts_markdups {
 
     script:
     """
-    echo hello # remove
     featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files}
     """
 }
