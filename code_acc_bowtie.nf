@@ -403,7 +403,7 @@ process feature_counts_raw {
 
     script:
     """
-    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files} 
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_name -o ${prefix}_counts.txt ${bam_files} 
     """
 }
 
@@ -422,7 +422,7 @@ process feature_counts_markdups {
 
     script:
     """
-    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id --ignoreDup -o ${prefix}_counts.txt ${bam_files}
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_name --ignoreDup -o ${prefix}_counts.txt ${bam_files}
     """
 }
 
