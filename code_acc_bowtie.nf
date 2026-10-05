@@ -45,12 +45,11 @@ process footer {
     """
 }
 
-process convert_manifest_fasta_GTF {
+process convert_manifest_fasta {
     input:
     path manifest_file
 
     output:
-    path "*.gtf", emit: gtf_file
     path "*.{fasta,fa}", emit: fasta_file
 
     script:
@@ -61,7 +60,18 @@ process convert_manifest_fasta_GTF {
         echo ">\$probe_name"
         echo "\$probe_sequence"
     done < <(tail -n +2 ${manifest_file}) > probes.fasta
+    """
+}
 
+process convert_manifest_GTF {
+    input:
+    path manifest_file
+
+    output:
+    path "*.gtf", emit: gtf_file
+
+    script:
+    """
     # create gtf
     while IFS="," read -r row_num probe_id gene_symbol probe_name probe_sequence PROBE_COORDINATE ENSEMBL_GENE_ID ALIGNED_ENSEMBL_TRANSCRIPTS ENTREZ_ID ALIGNED_REFSEQ_TRANSCRIPTS ATTENUATION_FACTOR
     do
@@ -466,7 +476,8 @@ workflow {
     // accession_numbers_file
     // //
 
-    convert_manifest_fasta_GTF(manifest_file)
+    convert_manifest_fasta(manifest_file)
+    convert_manifest_GTF(manifest_file)
 
     retrieve_accessions_numbers(sra_accession_number)
 
@@ -490,7 +501,7 @@ workflow {
     MULTIQC(FASTQC.out.qc_files.collect()) // must use .colect() with () to work
 
     // NEW:
-    RNABowtie_index(convert_manifest_fasta_GTF.out.fasta_file)
+    RNABowtie_index(convert_manifest_fasta.out.fasta_file)
     RNABowtie(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
 
     // NEW:
@@ -501,15 +512,15 @@ workflow {
     picard_add_read_groups(RNABowtie.out.bowtie_alignment)
     picard_mark_duplicates(picard_add_read_groups.out.add_RG_bam)
 
-    // generate_SAF(convert_manifest_fasta_GTF.out.)
+    // generate_SAF(convert_manifest_fasta.out.)
 
     // feature counts for without marked duplications!!!
     // feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
-    feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), convert_manifest_fasta_GTF.out.gtf_file, "raw")
+    feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), convert_manifest_GTF.out.gtf_file, "raw")
 
     // feature counts for with marked duplications!!!
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
-    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), convert_manifest_fasta_GTF.out.gtf_file, "markdups")
+    feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), convert_manifest_GTF.out.gtf_file, "markdups")
 
      // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
     MULTIQC_raw_flagstat(
@@ -532,8 +543,8 @@ workflow {
 
     publish:
 
-    GTF_file = convert_manifest_fasta_GTF.out.gtf_file
-    FA_file = convert_manifest_fasta_GTF.out.fasta_file
+    GTF_file = convert_manifest_GTF.out.gtf_file
+    FA_file = convert_manifest_fasta.out.fasta_file
 
     retrieve_accessions_numbers = retrieve_accessions_numbers.out.accession_numbers_file
 
