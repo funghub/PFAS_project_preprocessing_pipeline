@@ -703,32 +703,32 @@ output {
 
     // feturecounts dependencies start
     multiqc_raw_flagstat {
-        path "${params.output_dir}/probe_names/multi_qc_results"
+        path "${params.output_dir}/PROBE_names_results/multi_qc_results"
         mode 'copy'
     }
 
     multiqc_markdups_picard {
-        path "${params.output_dir}/probe_names/multi_qc_results"
+        path "${params.output_dir}/PROBE_names_results/multi_qc_results"
         mode 'copy'
     }
 
     featurecounts_raw {
-        path "${params.output_dir}/probe_names/featurecounts"
+        path "${params.output_dir}/PROBE_names_results/featurecounts"
         mode 'copy'
     }
 
     featurecounts_summary_raw {
-        path "${params.output_dir}/probe_names/featurecounts"
+        path "${params.output_dir}/PROBE_names_results/featurecounts"
         mode 'copy'
     }
 
     featurecounts_markdups {
-        path "${params.output_dir}/probe_names/featurecounts"
+        path "${params.output_dir}/PROBE_names_results/featurecounts"
         mode 'copy'
     }
 
     featurecounts_summary_markdups {
-        path "${params.output_dir}/probe_names/featurecounts"
+        path "${params.output_dir}/PROBE_names_results/featurecounts"
         mode 'copy'
     }
 
