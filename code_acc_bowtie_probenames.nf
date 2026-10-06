@@ -406,6 +406,7 @@ process feature_counts_raw {
     featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g probe_name -o ${prefix}_counts.txt ${bam_files} 
     """
     // ONLY CHANGED gene_name to probe_name b/c counting probenames here to compare with the author's counts
+}
 
 process feature_counts_markdups {
     conda "bioconda::subread"
