@@ -17,11 +17,13 @@
 // params.probes_fa = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/probes.fasta"
 // params.gtf_file = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/temposeq_annotations_with_transcripts.gtf"
 
-params.manifest = "${projectDir}/manifest/*.csv" // get manifest from folder containing the main script (the cached clone of github)
-// replaced ${launchDir}
 
 params.help = false  // Set the default to false
 include { paramsHelp } from 'plugin/nf-schema'
+
+params.manifest = "${projectDir}/manifest/*.csv" // get manifest from folder containing the main script (the cached clone of github)
+// replaced ${launchDir}
+
 
 
 process header {
