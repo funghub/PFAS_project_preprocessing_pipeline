@@ -679,37 +679,6 @@ output {
         mode 'copy'
     }
 
-    multiqc_raw_flagstat {
-    path "${params.output_dir}/multi_qc_results"
-    mode 'copy'
-    }
-
-    multiqc_markdups_picard {
-        path "${params.output_dir}/multi_qc_results"
-        mode 'copy'
-    }
-
-    featurecounts_raw {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
-
-    featurecounts_summary_raw {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
-
-    featurecounts_markdups {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
-
-    featurecounts_summary_markdups {
-        path "${params.output_dir}/featurecounts"
-        mode 'copy'
-    }
-
-
     // NEW:
     bowtie_index { 
         path "${params.output_dir}/bowtie_index"
@@ -730,5 +699,37 @@ output {
     //     path "${params.output_dir}/generate_SAF"
     //     mode 'copy' 
     //     }
+
+
+    // feturecounts dependencies start
+    multiqc_raw_flagstat {
+        path "${params.output_dir}/probe_names/multi_qc_results"
+        mode 'copy'
+    }
+
+    multiqc_markdups_picard {
+        path "${params.output_dir}/probe_names/multi_qc_results"
+        mode 'copy'
+    }
+
+    featurecounts_raw {
+        path "${params.output_dir}/probe_names/featurecounts"
+        mode 'copy'
+    }
+
+    featurecounts_summary_raw {
+        path "${params.output_dir}/probe_names/featurecounts"
+        mode 'copy'
+    }
+
+    featurecounts_markdups {
+        path "${params.output_dir}/probe_names/featurecounts"
+        mode 'copy'
+    }
+
+    featurecounts_summary_markdups {
+        path "${params.output_dir}/probe_names/featurecounts"
+        mode 'copy'
+    }
 
 }
