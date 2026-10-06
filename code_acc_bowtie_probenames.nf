@@ -17,14 +17,8 @@
 // params.probes_fa = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/probes.fasta"
 // params.gtf_file = "/scratch/home/lfung/PFAS_aarohi_GTFnFA/temposeq_annotations_with_transcripts.gtf"
 
-
-params.help = false  // Set the default to false
-include { paramsHelp } from 'plugin/nf-schema'
-
 params.manifest = "${projectDir}/manifest/*.csv" // get manifest from folder containing the main script (the cached clone of github)
 // replaced ${launchDir}
-
-
 
 process header {
     script:
@@ -438,6 +432,8 @@ params.output_dir = 'results'     // Default output directory
 // params.input = "${params.input_dir}/*.fastq"
 
 
+params.help = false  // Set the default to false
+include { paramsHelp } from 'plugin/nf-schema'
 
 // Module aliases to reuse processes but have different outputs!: didn't work
 // feature_counts must be located in separate .nf file
