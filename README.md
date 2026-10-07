@@ -4,6 +4,18 @@
 - **code_acc_bowtie.nf** (a pipeline) runs through Nextflow by pulling from GitHub that had **nextflow.config** configured already.
 **NOTE: please download the TempO-Seq Manifest (Human S1500+ Surrogate v2.0 or another version) into a folder "manifest" in the directory you are running nextflow.**
 
+## .nf Files (change which .nf to use in *nextflow.config* `mainScript =`):
+### **Main Nextflow Pipeline**
+- *code_acc_bowtie.nf* = runs TempoSeq probes with Human S1500+ Surrogate v2.0 manifest with Bowtie2 for mapping gene_symbols (like BRAC1)
+    - do not use this if you are planning a traditional bulk RNA-seq
+### **Other Nextflow Pipelines**
+- *code_acc_bowtie_probenames.nf* = runs TempoSeq probes with Human S1500+ Surrogate v2.0 manifest with Bowtie2 for mapping probe_names (like BRAC1_2)
+    - do not use this if you are planning a traditional bulk RNA-seq
+- *code_acc_old_star.nf* = runs sequences reads (any) with STAR for mapping gene_symbols (like BRAC1) with GTF-NCBI and reference geneome hg38 from UCSC Genome Browser
+    - for traditional bulk RNA-seq logic
+    - may need to modify pipeline to fit your needs
+
+
 ## About command to start
 ### Usage to run command:
 
