@@ -8,9 +8,11 @@
 ### **Main Nextflow Pipeline**
 - *code_acc_bowtie.nf* = runs TempoSeq probes with Human S1500+ Surrogate v2.0 manifest with Bowtie2 for mapping gene_symbols (like BRAC1)
     - do not use this if you are planning a traditional bulk RNA-seq
+    - best for DESeq2 and GSEA later because GSEA use gene_symbols - ex: Hallmark Genes
 ### **Other Nextflow Pipelines**
 - *code_acc_bowtie_probenames.nf* = runs TempoSeq probes with Human S1500+ Surrogate v2.0 manifest with Bowtie2 for mapping probe_names (like BRAC1_2)
     - do not use this if you are planning a traditional bulk RNA-seq
+    - best for just comparing your counts to the author's counts if they counted probe_names    
 - *code_acc_old_star.nf* = runs sequences reads (any) with STAR for mapping gene_symbols (like BRAC1) with GTF-NCBI and reference geneome hg38 from UCSC Genome Browser
     - for traditional bulk RNA-seq logic
     - may need to modify pipeline to fit your needs

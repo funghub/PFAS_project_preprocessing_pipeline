@@ -254,18 +254,52 @@ process RNABowtie {
     output:
     path "*.bam", emit: bowtie_alignment
     path "*.log", emit: bowtie_logs
+    path "*_end2end_unmapped.fastq", emit: bowtie_end2end_unmapped_reads
 
     script:
     def prefix = trimmed_fastq.name.replace("_trimmed.fastq","")
     """
     # --no-unal suppress suppress SAM records for unaligned reads
-    bowtie2 --no-unal \
+    # --no-unal removed so unmapped reads (flag 4) stay in the BAM
+    bowtie2 \
             -x probe_index \
             -U ${trimmed_fastq} \
+            --un ${prefix}_end2end_unmapped.fastq \
             -p ${task.cpus} 2> ${prefix}_bowtie.log \
             | samtools sort -o ${prefix}_bowtie_Aligned.out.bam
     """
 }
+
+// NEW:
+process RNABowtie_local {
+
+    conda "bioconda::bowtie2 bioconda::samtools"
+
+    input:
+    path bowtie_index
+    path trimmed_fastq
+
+    output:
+    path "*.bam", emit: bowtie_local_alignment
+    path "*.log", emit: bowtie_local_logs
+    path "*_local_unmapped.fastq", emit: bowtie_local_unmapped_reads
+
+    script:
+    def prefix = trimmed_fastq.name.replace("_trimmed.fastq","")
+    """
+    # --no-unal suppress suppress SAM records for unaligned reads
+    # --no-unal removed so unmapped reads (flag 4) stay in the BAM
+    # --un sets what filename unmapped reads will be written to
+    # --local alignment for better scoring, might "trim" or "clip" some read characters from one or both ends
+    bowtie2 --local \
+            -x probe_index \
+            -U ${trimmed_fastq} \
+            --un ${prefix}_local_unmapped.fastq \
+            -p ${task.cpus} 2> ${prefix}_bowtie_local.log \
+            | samtools sort -o ${prefix}_bowtie_local_Aligned.out.bam
+    """
+}
+
 
 process samtools_index { // for getting bai file from bam
     conda "bioconda::samtools"
@@ -300,6 +334,27 @@ process samtools_flagstat {
     
     """
     samtools flagstat ${star_alignment} > ${prefix}_flagstat.txt
+    """
+}
+
+// NEW: unmapped reads see statistics
+process samtools_flagstat_local {
+    conda "bioconda::samtools"
+    
+    input:
+    path star_alignment
+
+    output:
+    path "*.txt", emit: flagstat
+
+    script:
+    // def prefix = star_alignment.name.replace("_trimmed.Aligned.sortedByCoord.out.bam","")
+    
+    // NEW:
+    def prefix = star_alignment.name.replace("_bowtie_local_Aligned.out.bam","")
+    
+    """
+    samtools flagstat ${star_alignment} > ${prefix}_local_flagstat.txt
     """
 }
 
@@ -367,6 +422,23 @@ process MULTIQC_markdups_picard {
     script:
     """
     multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_picard
+    """
+}
+
+
+// NEW: unmapped reads local
+process MULTIQC_raw_local_flagstat {
+    conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+
+    input:
+    path raw_local_flagstat_bowtie_logs
+
+    output:
+    path "multiqc_raw_local_flagstat.html", emit: report_raw_local_flagstat
+
+    script:
+    """
+    multiqc ${raw_local_flagstat_bowtie_logs} -n multiqc_raw_local_flagstat
     """
 }
 
@@ -504,9 +576,20 @@ workflow {
     RNABowtie_index(convert_manifest_fasta.out.fasta_file)
     RNABowtie(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
 
+    
     // NEW:
     samtools_index(RNABowtie.out.bowtie_alignment)
     samtools_flagstat(RNABowtie.out.bowtie_alignment)
+
+    // NEW: for unmapped reads
+    RNABowtie_local(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
+    samtools_flagstat_local(RNABowtie_local.out.bowtie_local_alignment)
+
+    // NEW: raw: flagstat on BOWTIE local BAM + BOWTIE logs (true mapping rate)
+    MULTIQC_raw_local_flagstat(
+        samtools_flagstat_local.out.flagstat.collect()
+            .mix(RNABowtie_local.out.bowtie_local_logs.collect())
+            .collect())
 
 
     picard_add_read_groups(RNABowtie.out.bowtie_alignment)
@@ -522,7 +605,7 @@ workflow {
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
     feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), convert_manifest_GTF.out.gtf_file, "markdups")
 
-     // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
+    // raw: flagstat on STAR BAM + STAR logs (true mapping rate)
     MULTIQC_raw_flagstat(
         samtools_flagstat.out.flagstat.collect()
             .mix(RNABowtie.out.bowtie_logs.collect())
@@ -569,6 +652,7 @@ workflow {
     bowtie_index = RNABowtie_index.out.probe_index
     bowtie_alignment = RNABowtie.out.bowtie_alignment
     bowtie_logs = RNABowtie.out.bowtie_logs
+    bowtie_unmapped_reads_end2end = RNABowtie.out.bowtie_end2end_unmapped_reads
 
     bai_files = samtools_index.out.bai_files
 
@@ -592,6 +676,13 @@ workflow {
     featurecounts_markdups = feature_counts_markdups.out.counts
     featurecounts_summary_markdups = feature_counts_markdups.out.summary
 
+
+    // NEW: unmapped reads
+    bowtie_alignment_local = RNABowtie_local.out.bowtie_local_alignment
+    bowtie_logs_local = RNABowtie_local.out.bowtie_local_logs
+    bowtie_unmapped_reads_local = RNABowtie_local.out.bowtie_local_unmapped_reads
+    flagstat_local = samtools_flagstat_local.out.flagstat
+    multiqc_raw_local_flagstat = MULTIQC_raw_local_flagstat.out.report_raw_local_flagstat
 }
 
 output {
@@ -721,6 +812,9 @@ output {
     bowtie_logs { 
         path "${params.output_dir}/bowtie_logs" 
         }
+    bowtie_unmapped_reads_end2end {
+        path "${params.output_dir}/unmapped_reads_end2end/unmapped_fastq" 
+        }
     // generate_SAF_FAI_file { 
     //     path "${params.output_dir}/generate_SAF"
     //     mode 'copy' 
@@ -729,5 +823,26 @@ output {
     //     path "${params.output_dir}/generate_SAF"
     //     mode 'copy' 
     //     }
+
+
+    // NEW: unmapped reads
+    bowtie_alignment_local {
+        path "${params.output_dir}/unmapped_reads_local/bowtie_alignment"
+        mode 'copy' 
+    }
+    bowtie_logs_local { 
+        path "${params.output_dir}/unmapped_reads_local/bowtie_logs" 
+        }
+    bowtie_unmapped_reads_local {
+        path "${params.output_dir}/unmapped_reads_local/unmapped_fastq" 
+    }
+    flagstat_local {
+        path "${params.output_dir}/unmapped_reads_local/BOWTIE_flagstat"
+        // mode 'copy'
+    }
+    multiqc_raw_local_flagstat {
+        path "${params.output_dir}/unmapped_reads_local/multi_qc_results"
+        mode 'copy'
+    }
 
 }
