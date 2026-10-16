@@ -395,6 +395,44 @@ process picard_mark_duplicates {
     """
 }
 
+// NEW:
+process picard_alignment_metrics_end2end {
+    conda "bioconda::picard=3.3.0"
+
+    input:
+    path bam
+    path probes_fa
+
+    output:
+    path "*_alignment_metrics_end2end.txt", emit: alignment_metrics_end2end
+
+    script:
+    def prefix = bam.name.replace(".bam","")
+    """
+    picard CreateSequenceDictionary -R ${probes_fa}
+    picard CollectAlignmentSummaryMetrics -I ${bam} -O ${prefix}_alignment_metrics_end2end.txt -R ${probes_fa}
+    """
+}
+// NEW:
+process picard_alignment_metrics_local {
+    conda "bioconda::picard=3.3.0"
+
+    input:
+    path bam
+    path probes_fa
+
+    output:
+    path "*_alignment_metrics_local.txt", emit: alignment_metrics_local
+
+    script:
+    def prefix = bam.name.replace(".bam","")
+    """
+    picard CreateSequenceDictionary -R ${probes_fa}
+    picard CollectAlignmentSummaryMetrics -I ${bam} -O ${prefix}_alignment_metrics_local.txt -R ${probes_fa}
+    """
+}
+
+
 process MULTIQC_raw_flagstat {
     conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
 
@@ -580,15 +618,20 @@ workflow {
     // NEW:
     samtools_index(RNABowtie.out.bowtie_alignment)
     samtools_flagstat(RNABowtie.out.bowtie_alignment)
+    picard_alignment_metrics_end2end(RNABowtie.out.bowtie_alignment, convert_manifest_fasta.out.fasta_file.collect())
+
 
     // NEW: for unmapped reads
     RNABowtie_local(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
     samtools_flagstat_local(RNABowtie_local.out.bowtie_local_alignment)
+    picard_alignment_metrics_local(RNABowtie_local.out.bowtie_local_alignment, convert_manifest_fasta.out.fasta_file.collect())
+
 
     // NEW: raw: flagstat on BOWTIE local BAM + BOWTIE logs (true mapping rate)
     MULTIQC_raw_local_flagstat(
         samtools_flagstat_local.out.flagstat.collect()
             .mix(RNABowtie_local.out.bowtie_local_logs.collect())
+            .mix(picard_alignment_metrics_local.out.alignment_metrics_local.collect())
             .collect())
 
 
@@ -610,6 +653,7 @@ workflow {
         samtools_flagstat.out.flagstat.collect()
             .mix(RNABowtie.out.bowtie_logs.collect())
             .mix(feature_counts_raw.out.summary.collect())
+            .mix(picard_alignment_metrics_end2end.out.alignment_metrics_end2end.collect())
             .collect())
 
     // markdups: Picard metrics only
@@ -683,6 +727,11 @@ workflow {
     bowtie_unmapped_reads_local = RNABowtie_local.out.bowtie_local_unmapped_reads
     flagstat_local = samtools_flagstat_local.out.flagstat
     multiqc_raw_local_flagstat = MULTIQC_raw_local_flagstat.out.report_raw_local_flagstat
+
+
+    // NEW picard
+    picard_alignment_metrics_end2end_results = picard_alignment_metrics_end2end.out.alignment_metrics_end2end
+    picard_alignment_metrics_local_results = picard_alignment_metrics_local.out.alignment_metrics_local
 }
 
 output {
@@ -845,4 +894,11 @@ output {
         mode 'copy'
     }
 
+    // NEW: picard
+    picard_alignment_metrics_end2end_results { 
+        path "${params.output_dir}/picard/alignment_metrics_end2end" 
+        }
+    picard_alignment_metrics_local_results { 
+        path "${params.output_dir}/picard/alignment_metrics_local" 
+        }
 }
