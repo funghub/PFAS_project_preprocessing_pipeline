@@ -174,6 +174,7 @@ process STAR_index {
     output:
     path "STAR_hg38_index", emit: star_index
     path "Genome_Annotation/hg38.ncbiRefSeq.gtf", emit: gtf_file
+    path "Genome_Assembly/chroms_all.fa", emit: genome_fa
 
     script:
     """
@@ -210,15 +211,23 @@ process STAR_align {
     output:
     path "*.bam", emit: star_alignment
     path "*.{out,tab}", emit: star_logs
+    path "*_unmapped.fastq", emit: star_unmapped_reads
 
     script:
     """
     # complete alignment
+    # Unmapped reads can be output into the SAM/BAM Aligned.* files --outSAMunmapped, Within output unmapped reads within the main SAM file
+    # string: output of unmapped and partially mapped (i.e. mapped only one mate of a paired end read) reads in separate file(s). --outReadsUnmapped
     STAR --genomeDir ${star_index} \
         --readFilesIn ${trimmed_fastq} \
         --outFileNamePrefix ${trimmed_fastq.baseName}. \
         --runThreadN ${task.cpus} \
-        --outSAMtype BAM SortedByCoordinate
+        --outSAMtype BAM SortedByCoordinate \
+        --outSAMunmapped Within \
+        --outReadsUnmapped Fastx \
+        --outSAMattributes All
+    
+    mv ${trimmed_fastq.baseName}.Unmapped.out.mate1 ${trimmed_fastq.baseName}_unmapped.fastq
     """
 }
 
@@ -292,20 +301,101 @@ process picard_mark_duplicates {
     """
 }
 
-process MULTIQC_markdups_flagstat {
+// NEW:
+// Creates a sequence dictionary for a reference sequence
+process make_genome_dict {
+    conda "bioconda::picard=3.3.0"
+    input:  path genome_fa
+    output: path "chroms_all.fa",   emit: genome_fa
+            path "chroms_all.dict", emit: genome_dict
+    script:
+    """
+    picard CreateSequenceDictionary -R ${genome_fa}
+    """
+}
+
+process picard_alignment_metrics {
+    conda "bioconda::picard=3.3.0"
+    input:  path bam
+            path genome_fa
+            path genome_dict
+    output: path "*_alignment_metrics.txt", emit: alignment_metrics
+    script:
+    def prefix = bam.name.replace(".bam","")
+    """
+    picard CollectAlignmentSummaryMetrics -I ${bam} -O ${prefix}_alignment_metrics.txt -R ${genome_fa}
+    """
+}
+
+
+// NEW:
+process MULTIQC_raw_flagstat {
+    conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+
+    input:
+    path raw_flagstat_bowtie_logs
+
+    output:
+    path "multiqc_raw_flagstat.html", emit: report_raw_flagstat
+
+    script:
+    """
+    multiqc ${raw_flagstat_bowtie_logs} -n multiqc_raw_flagstat
+    """
+}
+
+process MULTIQC_markdups_picard {
     conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
     
     input:
     path marked_dups_flagstat_metrics
 
     output:
-    path "multiqc_markdups_flagstat.html", emit: report_markdups_flagstat
+    path "multiqc_markdups_picard.html", emit: report_markdups_flagstat
 
     script:
     """
-    multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_flagstat
+    multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_picard
     """
 }
+
+// process MULTIQC_markdups_flagstat {
+//     conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+    
+//     input:
+//     path marked_dups_flagstat_metrics
+
+//     output:
+//     path "multiqc_markdups_flagstat.html", emit: report_markdups_flagstat
+
+//     script:
+//     """
+//     multiqc ${marked_dups_flagstat_metrics} -n multiqc_markdups_flagstat
+//     """
+// }
+
+// NEW: diagnose the baseline unmapped reads
+process FASTQC_unmapped {
+    conda "bioconda::fastqc=0.12.1"
+    input:  path unmapped_fastq
+    output: path "*_fastqc.{zip,html}", emit: qc_files
+    script:
+    """
+    fastqc -t ${task.cpus} ${unmapped_fastq}
+    """
+}
+
+process MULTIQC_unmapped {
+    conda "bioconda::multiqc"
+    input:  path reports
+    output: path "multiqc_unmapped.html", emit: report_unmapped
+    script:
+    """
+    multiqc ${reports} -n multiqc_unmapped
+    """
+}
+
+
 
 process feature_counts_raw {
     conda "bioconda::subread"
@@ -341,7 +431,7 @@ process feature_counts_markdups {
 
     script:
     """
-    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id -o ${prefix}_counts.txt ${bam_files}
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_id --ignoreDup -o ${prefix}_counts.txt ${bam_files}
     """
 }
 
@@ -425,13 +515,34 @@ workflow {
     picard_add_read_groups(STAR_align.out.star_alignment)
     picard_mark_duplicates(picard_add_read_groups.out.add_RG_bam)
 
-    // add in picard metrics file and mix channel with the outputs for samtools flagstat metrics
-    MULTIQC_markdups_flagstat(picard_mark_duplicates.out.marked_dups_metrics.collect().mix(samtools_flagstat.out.flagstat.collect()).collect())
-    
+    //NEW:
+    make_genome_dict(STAR_index.out.genome_fa)
+    picard_alignment_metrics(STAR_align.out.star_alignment, make_genome_dict.out.genome_fa, make_genome_dict.out.genome_dict)
+
+
+
     // feature counts for without marked duplications!!!
     feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
     // feature counts for with marked duplications!!!
     feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
+    
+
+    // NEW:
+    FASTQC_unmapped(STAR_align.out.star_unmapped_reads)
+    MULTIQC_unmapped(FASTQC_unmapped.out.qc_files.collect())
+
+    MULTIQC_raw_flagstat(
+        samtools_flagstat.out.flagstat.collect()
+            .mix(STAR_align.out.star_logs.collect())
+            .mix(feature_counts_raw.out.summary.collect())
+            .mix(picard_alignment_metrics.out.alignment_metrics.collect())
+            .collect())
+
+    // add in picard metrics file and mix channel with the outputs for samtools flagstat metrics
+    MULTIQC_markdups_picard(
+        picard_mark_duplicates.out.marked_dups_metrics.collect()
+            .mix(feature_counts_markdups.out.summary.collect())
+            .collect())
     
 
 
@@ -468,7 +579,14 @@ workflow {
     marked_dups_bam = picard_mark_duplicates.out.marked_dups_bam
     marked_dups_metrics = picard_mark_duplicates.out.marked_dups_metrics
 
-    multiqc_markdups_flagstat = MULTIQC_markdups_flagstat.out.report_markdups_flagstat
+    multiqc_markdups_picard_results = MULTIQC_markdups_picard.out.report_markdups_flagstat
+
+    // NEW:
+    star_unmapped_reads = STAR_align.out.star_unmapped_reads
+    picard_alignment_metrics_results = picard_alignment_metrics.out.alignment_metrics
+    multiqc_raw_flagstat = MULTIQC_raw_flagstat.out.report_raw_flagstat
+    multiqc_unmapped = MULTIQC_unmapped.out.report_unmapped
+
 
     // feature counts for without marked duplications!!!
     featurecounts_raw = feature_counts_raw.out.counts
@@ -568,10 +686,27 @@ output {
         mode 'copy'
     }
 
-    multiqc_markdups_flagstat {
+    multiqc_markdups_picard_results {
         path "${params.output_dir}/multi_qc_results"
         mode 'copy'
     }
+
+    // NEW:
+    multiqc_raw_flagstat {
+    path "${params.output_dir}/multi_qc_results"
+    mode 'copy'
+    }
+    star_unmapped_reads {
+        path "${params.output_dir}/unmapped_reads/unmapped_fastq"
+    }
+    multiqc_unmapped {
+        path "${params.output_dir}/unmapped_reads/multi_qc_results"
+        mode 'copy'
+    }
+    picard_alignment_metrics_results {
+        path "${params.output_dir}/picard/alignment_metrics"
+    }
+
 
     featurecounts_raw {
         path "${params.output_dir}/featurecounts"
