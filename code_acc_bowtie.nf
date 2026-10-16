@@ -1,6 +1,5 @@
 #!/usr/bin/env nextflow
 
-// STAR VERSION config
 // change file name to code.nf when finished
 // REMEMBER TO CD into PFAS_Data_NF
 
@@ -935,9 +934,16 @@ output {
     bowtie_logs { 
         path "${params.output_dir}/bowtie_logs" 
         }
+
+    // NEW:
     bowtie_unmapped_reads_end2end {
         path "${params.output_dir}/unmapped_reads_end2end/unmapped_fastq" 
         }
+    multiqc_unmapped_end2end {
+    path "${params.output_dir}/unmapped_reads_end2end/multi_qc_results"
+    mode 'copy'
+    }
+
     // generate_SAF_FAI_file { 
     //     path "${params.output_dir}/generate_SAF"
     //     mode 'copy' 
@@ -969,10 +975,6 @@ output {
     }
 
     // NEW:
-    multiqc_unmapped_end2end {
-    path "${params.output_dir}/unmapped_reads_end2end/multi_qc_results"
-    mode 'copy'
-    }
     multiqc_unmapped_local {
     path "${params.output_dir}/unmapped_reads_local/multi_qc_results"
     mode 'copy'
