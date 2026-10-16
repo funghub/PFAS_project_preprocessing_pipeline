@@ -1,5 +1,6 @@
 #!/usr/bin/env nextflow
 
+// STAR VERSION config
 // change file name to code.nf when finished
 // REMEMBER TO CD into PFAS_Data_NF
 
@@ -480,6 +481,68 @@ process MULTIQC_raw_local_flagstat {
     """
 }
 
+// NEW: diagnose the baseline unmapped reads end2end
+process FASTQC_unmapped_end2end {
+    conda "bioconda::fastqc=0.12.1"
+
+    input:
+    path unmapped_fastq
+
+    output:
+    path "*_fastqc.{zip,html}", emit: qc_files
+
+    script:
+    """
+    fastqc -t ${task.cpus} ${unmapped_fastq}
+    """
+}
+
+process MULTIQC_unmapped_end2end {
+    conda "bioconda::multiqc"
+
+    input:
+    path reports
+
+    output:
+    path "multiqc_end2end_unmapped.html", emit: report_unmapped
+
+    script:
+    """
+    multiqc ${reports} -n multiqc_end2end_unmapped
+    """
+}
+
+// NEW: diagnose the baseline unmapped reads local
+process FASTQC_unmapped_local {
+    conda "bioconda::fastqc=0.12.1"
+
+    input:
+    path unmapped_fastq
+
+    output:
+    path "*_fastqc.{zip,html}", emit: qc_files
+
+    script:
+    """
+    fastqc -t ${task.cpus} ${unmapped_fastq}
+    """
+}
+
+process MULTIQC_unmapped_local {
+    conda "bioconda::multiqc"
+
+    input:
+    path reports
+
+    output:
+    path "multiqc_local_unmapped.html", emit: report_unmapped
+
+    script:
+    """
+    multiqc ${reports} -n multiqc_local_unmapped
+    """
+}
+
 // process generate_SAF {
 //     conda "bioconda::samtools"
     
@@ -614,6 +677,10 @@ workflow {
     RNABowtie_index(convert_manifest_fasta.out.fasta_file)
     RNABowtie(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
 
+    // NEW: diagnosing unmapped reads end2end
+    FASTQC_unmapped_end2end(RNABowtie.out.bowtie_end2end_unmapped_reads)
+    MULTIQC_unmapped_end2end(FASTQC_unmapped_end2end.out.qc_files.collect())
+
     
     // NEW:
     samtools_index(RNABowtie.out.bowtie_alignment)
@@ -625,6 +692,10 @@ workflow {
     RNABowtie_local(RNABowtie_index.out.probe_index.collect(), FASTP.out.trimmed)
     samtools_flagstat_local(RNABowtie_local.out.bowtie_local_alignment)
     picard_alignment_metrics_local(RNABowtie_local.out.bowtie_local_alignment, convert_manifest_fasta.out.fasta_file.collect())
+
+    // NEW: diagnosing unmapped reads local
+    FASTQC_unmapped_local(RNABowtie_local.out.bowtie_local_unmapped_reads)
+    MULTIQC_unmapped_local(FASTQC_unmapped_local.out.qc_files.collect())
 
 
     // NEW: raw: flagstat on BOWTIE local BAM + BOWTIE logs (true mapping rate)
@@ -697,6 +768,9 @@ workflow {
     bowtie_alignment = RNABowtie.out.bowtie_alignment
     bowtie_logs = RNABowtie.out.bowtie_logs
     bowtie_unmapped_reads_end2end = RNABowtie.out.bowtie_end2end_unmapped_reads
+
+    multiqc_unmapped_end2end = MULTIQC_unmapped_end2end.out.report_unmapped
+    multiqc_unmapped_local = MULTIQC_unmapped_local.out.report_unmapped
 
     bai_files = samtools_index.out.bai_files
 
@@ -892,6 +966,16 @@ output {
     multiqc_raw_local_flagstat {
         path "${params.output_dir}/unmapped_reads_local/multi_qc_results"
         mode 'copy'
+    }
+
+    // NEW:
+    multiqc_unmapped_end2end {
+    path "${params.output_dir}/unmapped_reads_end2end/multi_qc_results"
+    mode 'copy'
+    }
+    multiqc_unmapped_local {
+    path "${params.output_dir}/unmapped_reads_local/multi_qc_results"
+    mode 'copy'
     }
 
     // NEW: picard
