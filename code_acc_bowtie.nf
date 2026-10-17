@@ -598,6 +598,25 @@ process feature_counts_markdups {
     """
 }
 
+process feature_counts_local {
+    conda "bioconda::subread"
+    
+    input:
+    path bam_files
+    path gtf_file
+    val prefix      // because of Module aliases, add prefix
+    // val prefix is for _raw or _markdups (added as an input to when calling the process in workflow)
+
+    output:
+    path "${prefix}_counts.txt", emit: counts
+    path "${prefix}_counts.txt.summary", emit: summary
+
+    script:
+    """
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g gene_name -o ${prefix}_counts.txt ${bam_files} 
+    """
+}
+
 
 params.output_dir = 'results'     // Default output directory
 // params.input = "${params.input_dir}/*.fastq"
@@ -696,11 +715,15 @@ workflow {
     FASTQC_unmapped_local(RNABowtie_local.out.bowtie_local_unmapped_reads)
     MULTIQC_unmapped_local(FASTQC_unmapped_local.out.qc_files.collect())
 
+    // NEW:
+    feature_counts_local(RNABowtie_local.out.bowtie_local_alignment.collect(), convert_manifest_GTF.out.gtf_file, "raw_local")
+
 
     // NEW: raw: flagstat on BOWTIE local BAM + BOWTIE logs (true mapping rate)
     MULTIQC_raw_local_flagstat(
         samtools_flagstat_local.out.flagstat.collect()
             .mix(RNABowtie_local.out.bowtie_local_logs.collect())
+            .mix(feature_counts_local.out.summary.collect())
             .mix(picard_alignment_metrics_local.out.alignment_metrics_local.collect())
             .collect())
 
@@ -801,6 +824,8 @@ workflow {
     flagstat_local = samtools_flagstat_local.out.flagstat
     multiqc_raw_local_flagstat = MULTIQC_raw_local_flagstat.out.report_raw_local_flagstat
 
+    featurecounts_local = feature_counts_local.out.counts
+    featurecounts_summary_local = feature_counts_local.out.summary
 
     // NEW picard
     picard_alignment_metrics_end2end_results = picard_alignment_metrics_end2end.out.alignment_metrics_end2end
@@ -971,6 +996,15 @@ output {
     }
     multiqc_raw_local_flagstat {
         path "${params.output_dir}/unmapped_reads_local/multi_qc_results"
+        mode 'copy'
+    }
+
+    featurecounts_local {
+        path "${params.output_dir}/unmapped_reads_local/featurecounts"
+        mode 'copy'
+    }
+    featurecounts_summary_local {
+        path "${params.output_dir}/unmapped_reads_local/featurecounts"
         mode 'copy'
     }
 
