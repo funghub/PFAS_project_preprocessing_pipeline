@@ -600,7 +600,7 @@ workflow {
 output {
 
     retrieve_accessions_numbers {
-        path "${params.output_dir}/pretrim/SRR_Acc_List.txt"
+        path "${params.output_dir}/pretrim"
     }
 
     sra_files {
