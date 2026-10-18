@@ -55,7 +55,7 @@ process convert_manifest_fasta {
     script:
     """
     # create fasta
-    while IFS="," read -r probe_name probe_id gene_symbol probe_sequence ref_transcript transcripts_targeted
+    while IFS="," read -r probe_name gene_symbol probe_sequence ref_transcript transcripts_targeted
     do
         echo ">\$probe_name"
         echo "\$probe_sequence"
@@ -72,8 +72,8 @@ process convert_manifest_GTF {
 
     script:
     """
-    # create gtf (no coordinates or Ensembl IDs in the old manifest, so gene_id = gene symbol, strand = .)
-    while IFS="," read -r probe_name probe_id gene_symbol probe_sequence ref_transcript transcripts_targeted
+    # create gtf (no coordinates or Ensembl IDs in v1.2, so gene_id = gene symbol, strand = .)
+    while IFS="," read -r probe_name gene_symbol probe_sequence ref_transcript transcripts_targeted
     do
         printf '%s\\tTempoSeq\\texon\\t1\\t%d\\t.\\t.\\t.\\tgene_id "%s"; gene_name "%s"; probe_name "%s"; transcript_id "%s";\\n' \\
             "\$probe_name" "\${#probe_sequence}" \\
