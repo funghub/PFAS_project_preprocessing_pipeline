@@ -479,6 +479,20 @@ process MULTIQC_raw_local_flagstat {
     multiqc ${raw_local_flagstat_bowtie_logs} -n multiqc_raw_local_flagstat
     """
 }
+process MULTIQC_raw_local_probenames {
+    conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+
+    input:
+    path raw_local_flagstat_bowtie_logs
+
+    output:
+    path "multiqc_raw_local_probenames.html", emit: report_raw_local_probenames
+
+    script:
+    """
+    multiqc ${raw_local_flagstat_bowtie_logs} -n multiqc_raw_local_probenames
+    """
+}
 
 // NEW: diagnose the baseline unmapped reads end2end
 process FASTQC_unmapped_end2end {
@@ -617,6 +631,26 @@ process feature_counts_local {
     """
 }
 
+process feature_counts_local_probenames {
+    conda "bioconda::subread"
+    
+    input:
+    path bam_files
+    path gtf_file
+    val prefix      // because of Module aliases, add prefix
+    // val prefix is for _raw or _markdups (added as an input to when calling the process in workflow)
+
+    output:
+    path "${prefix}_counts_probenames.txt", emit: counts_probenames
+    path "${prefix}_counts_probenames.txt.summary", emit: summary_probenames
+
+    script:
+    """
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g probe_name -o ${prefix}_counts_probenames.txt ${bam_files} 
+    """
+    // ONLY CHANGED gene_name to probe_name b/c counting probenames here to compare with the author's counts
+}
+
 
 params.output_dir = 'results'     // Default output directory
 // params.input = "${params.input_dir}/*.fastq"
@@ -717,6 +751,7 @@ workflow {
 
     // NEW:
     feature_counts_local(RNABowtie_local.out.bowtie_local_alignment.collect(), convert_manifest_GTF.out.gtf_file, "raw_local")
+    feature_counts_local_probenames(RNABowtie_local.out.bowtie_local_alignment.collect(), convert_manifest_GTF.out.gtf_file, "raw_local")
 
 
     // NEW: raw: flagstat on BOWTIE local BAM + BOWTIE logs (true mapping rate)
@@ -725,6 +760,12 @@ workflow {
             .mix(RNABowtie_local.out.bowtie_local_logs.collect())
             .mix(feature_counts_local.out.summary.collect())
             .mix(picard_alignment_metrics_local.out.alignment_metrics_local.collect())
+            .collect())
+    MULTIQC_raw_local_probenames(
+        // samtools_flagstat_local.out.flagstat.collect()
+            // .mix(RNABowtie_local.out.bowtie_local_logs.collect())
+            feature_counts_local_probenames.out.summary_probenames.collect()
+            // .mix(picard_alignment_metrics_local.out.alignment_metrics_local.collect())
             .collect())
 
 
@@ -826,6 +867,11 @@ workflow {
 
     featurecounts_local = feature_counts_local.out.counts
     featurecounts_summary_local = feature_counts_local.out.summary
+
+    featurecounts_local_probenames = feature_counts_local_probenames.out.counts_probenames
+    featurecounts_summary_local_probenames = feature_counts_local_probenames.out.summary_probenames
+    multiqc_raw_local_probenames = MULTIQC_raw_local_probenames.out.report_raw_local_probenames
+
 
     // NEW picard
     picard_alignment_metrics_end2end_results = picard_alignment_metrics_end2end.out.alignment_metrics_end2end
@@ -1005,6 +1051,20 @@ output {
     }
     featurecounts_summary_local {
         path "${params.output_dir}/unmapped_reads_local/featurecounts"
+        mode 'copy'
+    }
+
+    // NEW: probenames
+    featurecounts_local_probenames {
+        path "${params.output_dir}/unmapped_reads_local/probenames/featurecounts"
+        mode 'copy'
+    }
+    featurecounts_summary_local_probenames {
+        path "${params.output_dir}/unmapped_reads_local/probenames/featurecounts"
+        mode 'copy'
+    }
+    multiqc_raw_local_probenames {
+        path "${params.output_dir}/unmapped_reads_local/probenames/multi_qc_results"
         mode 'copy'
     }
 
