@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 
-// change file name to code.nf when finished
-// REMEMBER TO CD into PFAS_Data_NF
+// This .nf uses manifest v1.2
+// REMEMBER TO CD into folder you want to safe the results
 
 // Command used, but now run through github, replace file with link
 // nextflow run funghub/PFAS_project --input PRJNA604830 -profile spartan_hpc -latest -resume
@@ -588,6 +588,44 @@ process feature_counts_raw {
     """
 }
 
+
+// NEW for probe_name end2end
+process feature_counts_raw_probenames {
+    conda "bioconda::subread"
+    
+    input:
+    path bam_files
+    path gtf_file
+    val prefix      // because of Module aliases, add prefix
+    // val prefix is for _raw or _markdups (added as an input to when calling the process in workflow)
+
+    output:
+    path "${prefix}_counts_probenames.txt", emit: counts_probenames
+    path "${prefix}_counts_probenames.txt.summary", emit: summary_probenames
+
+    script:
+    """
+    featureCounts -T ${task.cpus} -a ${gtf_file} -t exon -g probe_name -o ${prefix}_counts_probenames.txt ${bam_files} 
+    """
+    // ONLY CHANGED gene_name to probe_name b/c counting probenames here to compare with the author's counts
+}
+process MULTIQC_raw_probenames {
+    conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+
+    input:
+    path raw_flagstat_bowtie_logs
+
+    output:
+    path "multiqc_raw_probenames.html", emit: report_raw_probenames
+
+    script:
+    """
+    multiqc ${raw_flagstat_bowtie_logs} -n multiqc_raw_probenames
+    """
+}
+
+
+
 process feature_counts_markdups {
     conda "bioconda::subread"
     
@@ -772,6 +810,19 @@ workflow {
     // feature counts for without marked duplications!!!
     // feature_counts_raw(STAR_align.out.star_alignment.collect(), STAR_index.out.gtf_file, "raw")
     feature_counts_raw(RNABowtie.out.bowtie_alignment.collect(), convert_manifest_GTF.out.gtf_file, "raw")
+    
+
+
+    // NEW for probenames end2end
+    feature_counts_raw_probenames(RNABowtie.out.bowtie_alignment.collect(), convert_manifest_GTF.out.gtf_file, "raw")
+    MULTIQC_raw_probenames(
+        // samtools_flagstat_local.out.flagstat.collect()
+            // .mix(RNABowtie_local.out.bowtie_local_logs.collect())
+            feature_counts_raw_probenames.out.summary_probenames.collect()
+            // .mix(picard_alignment_metrics_local.out.alignment_metrics_local.collect())
+            .collect())
+
+
 
     // feature counts for with marked duplications!!!
     // feature_counts_markdups(picard_mark_duplicates.out.marked_dups_bam.collect(), STAR_index.out.gtf_file, "markdups")
@@ -852,6 +903,11 @@ workflow {
     featurecounts_markdups = feature_counts_markdups.out.counts
     featurecounts_summary_markdups = feature_counts_markdups.out.summary
 
+    // NEW: end2end probenames
+    featurecounts_probenames = feature_counts_raw_probenames.out.counts_probenames
+    featurecounts_summary_probenames = feature_counts_raw_probenames.out.summary_probenames
+    multiqc_raw_probenames = MULTIQC_raw_probenames.out.report_raw_probenames
+
 
     // NEW: unmapped reads
     bowtie_alignment_local = RNABowtie_local.out.bowtie_local_alignment
@@ -863,6 +919,7 @@ workflow {
     featurecounts_local = feature_counts_local.out.counts
     featurecounts_summary_local = feature_counts_local.out.summary
 
+    // NEW local probenames
     featurecounts_local_probenames = feature_counts_local_probenames.out.counts_probenames
     featurecounts_summary_local_probenames = feature_counts_local_probenames.out.summary_probenames
     multiqc_raw_local_probenames = MULTIQC_raw_local_probenames.out.report_raw_local_probenames
@@ -1050,7 +1107,7 @@ output {
     }
 
 
-    // NEW: probenames
+    // NEW: local probenames
     featurecounts_local_probenames {
         path "${params.output_dir}/unmapped_reads_local/probenames/featurecounts"
         mode 'copy'
@@ -1078,4 +1135,19 @@ output {
     picard_alignment_metrics_local_results { 
         path "${params.output_dir}/picard/alignment_metrics_local" 
         }
+
+
+    // NEW: end2end probenames
+    featurecounts_probenames {
+        path "${params.output_dir}/probenames_end2end/featurecounts"
+        mode 'copy'
+    }
+    featurecounts_summary_probenames {
+        path "${params.output_dir}/probenames_end2end/featurecounts"
+        mode 'copy'
+    }
+    multiqc_raw_probenames {
+        path "${params.output_dir}/probenames_end2end/multi_qc_results"
+        mode 'copy'
+    }
 }
