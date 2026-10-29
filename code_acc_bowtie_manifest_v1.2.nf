@@ -185,6 +185,22 @@ process FASTP {
     """
 }
 
+process FASTP_multiqc {
+    conda "conda-forge::polars-lts-cpu bioconda::multiqc=1.33"
+
+    input:
+    path fastp_reports
+
+    output:
+    path "multiqc_fastp_trimming.html", emit: report_trimming
+
+    script:
+    """
+    multiqc ${fastp_reports} -n multiqc_fastp_trimming
+    """
+
+}
+
 process FASTQC {
     conda "bioconda::fastqc=0.12.1" // using latest version might rid error of java.lang openjdk
     // publishDir "PFAS_Data_NF/${task.index}/fastqc_results", mode: 'copy'
@@ -755,6 +771,8 @@ workflow {
     
     // comment out below if need to verify pretrim multiqc report first 
     FASTP(retrieve_fastq.out.pretrim_fastq)
+    FASTP_multiqc(FASTP.out.reports.collect())
+
     FASTQC(FASTP.out.trimmed) // .trimmed specifically refers to the emit name given
     MULTIQC(FASTQC.out.qc_files.collect()) // must use .colect() with () to work
 
@@ -863,6 +881,7 @@ workflow {
     // comment out below if need to verify pretrim multiqc report first 
     fastp_trimmed = FASTP.out.trimmed
     fastp_reports = FASTP.out.reports
+    multiqc_report_trimming = FASTP_multiqc.out.report_trimming
 
     fastqc_results = FASTQC.out.qc_files
     
@@ -975,6 +994,11 @@ output {
         path "${params.output_dir}/fastp_results/reports" // tells where to save outputs to
         // without mode copy below, we are softlinking
         // mode 'copy'
+    }
+
+    multiqc_report_trimming {
+        path "${params.output_dir}/multi_qc_results"
+        mode 'copy'
     }
 
     // KEEP
